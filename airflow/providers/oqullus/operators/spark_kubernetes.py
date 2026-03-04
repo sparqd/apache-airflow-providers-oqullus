@@ -10,10 +10,10 @@ class OqullusSparkKubernetesOperator(SparkKubernetesOperator):
     """
     Spark Kubernetes operator with built-in XCom push for Spark application definition.
 
-    This operator injects PM output notebook path and pushes it to XCom.
+    This operator injects PM output notebook path and pushes it to per-try XCom key.
     """
 
-    XCOM_OUTPUT_NOTEBOOK_KEY = "output_notebook_path"
+    XCOM_OUTPUT_NOTEBOOK_KEY_PREFIX = "output_notebook_path__try_"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -84,5 +84,9 @@ class OqullusSparkKubernetesOperator(SparkKubernetesOperator):
     def execute(self, context: dict[str, Any]) -> Any:
         output_notebook_path = self._build_output_notebook_path(context)
         self._prepare_template_spec(context, output_notebook_path)
-        context["ti"].xcom_push(key=self.XCOM_OUTPUT_NOTEBOOK_KEY, value=output_notebook_path)
+        try_number = context["task_instance"].try_number
+        context["ti"].xcom_push(
+            key=f"{self.XCOM_OUTPUT_NOTEBOOK_KEY_PREFIX}{try_number}",
+            value=output_notebook_path,
+        )
         return super().execute(context)
