@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from functools import cached_property
 from typing import Any
 
 from airflow.providers.common.compat.notifier import BaseNotifier
@@ -53,7 +52,7 @@ class OqullusEmailNotifier(BaseNotifier):
         self.cc = cc
         self.bcc = bcc
 
-    @cached_property
+    @property
     def hook(self) -> SmtpHook:
         """SMTP hook."""
         return SmtpHook(smtp_conn_id=self.smtp_conn_id)
@@ -61,16 +60,17 @@ class OqullusEmailNotifier(BaseNotifier):
     def notify(self, context: dict[str, Any]) -> None:
         """Send email notification."""
         rendered_context = with_oqullus_context(context)
-        rendered_subject = self.subject.format(**rendered_context)
-        rendered_html = self.html_content.format(**rendered_context)
-        self.hook.send_email_smtp(
-            to=self.to,
-            subject=rendered_subject,
-            html_content=rendered_html,
-            from_email=self.from_email,
-            cc=self.cc,
-            bcc=self.bcc,
-        )
+        rendered_subject = self.subject.format_map(rendered_context)
+        rendered_html = self.html_content.format_map(rendered_context)
+        with self.hook as hook:
+            hook.send_email_smtp(
+                to=self.to,
+                subject=rendered_subject,
+                html_content=rendered_html,
+                from_email=self.from_email,
+                cc=self.cc,
+                bcc=self.bcc,
+            )
 
 
 def send_oqullus_email_notification(**kwargs: Any) -> OqullusEmailNotifier:

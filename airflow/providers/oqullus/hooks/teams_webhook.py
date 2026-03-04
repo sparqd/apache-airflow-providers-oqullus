@@ -114,7 +114,14 @@ class TeamsWebhookHook(HttpHook):
 
         conn = self.get_connection(http_conn_id) if http_conn_id else None
         resolved_webhook_url = self.handler.get_webhook_url(conn)
-        self.base_url, self.endpoint = self.handler.split_webhook_url(resolved_webhook_url)
+        self._resolved_base_url, self.endpoint = self.handler.split_webhook_url(resolved_webhook_url)
+        self.base_url = self._resolved_base_url
+        self._base_url_initialized = True
+
+    def _set_base_url(self, connection) -> None:
+        """Force resolved webhook base URL instead of connection host/schema."""
+        self.base_url = self._resolved_base_url
+        self._base_url_initialized = True
 
     def execute(self) -> None:
         """Execute the Teams webhook call."""

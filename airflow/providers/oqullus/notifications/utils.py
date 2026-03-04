@@ -19,7 +19,14 @@ def build_oqullus_log_url(context: dict[str, Any]) -> str:
 
 
 def with_oqullus_context(context: dict[str, Any]) -> dict[str, Any]:
-    """Add Oqullus-specific derived fields to callback context."""
-    rendered_context = dict(context)
-    rendered_context["oqullus_log_url"] = build_oqullus_log_url(context)
-    return rendered_context
+    """Add Oqullus-specific derived fields to callback context without copying all keys."""
+
+    class OqullusTemplateContext(dict[str, Any]):
+        def __init__(self, base_context: dict[str, Any]) -> None:
+            super().__init__(oqullus_log_url=build_oqullus_log_url(base_context))
+            self._base_context = base_context
+
+        def __missing__(self, key: str) -> Any:
+            return self._base_context[key]
+
+    return OqullusTemplateContext(context)

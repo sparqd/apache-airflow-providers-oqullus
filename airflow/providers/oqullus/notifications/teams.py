@@ -11,7 +11,7 @@ from airflow.providers.oqullus.notifications.utils import with_oqullus_context
 
 def _render_template_value(value: Any, context: dict[str, Any]) -> Any:
     if isinstance(value, str):
-        return value.format(**context)
+        return value.format_map(context)
     if isinstance(value, list):
         return [_render_template_value(item, context) for item in value]
     if isinstance(value, dict):
@@ -229,9 +229,9 @@ def send_teams_webhook_notification(
 
     def _notify(context: dict[str, Any]) -> None:
         rendered_context = with_oqullus_context(context)
-        rendered_message = message.format(**rendered_context)
-        rendered_title = title.format(**rendered_context) if title else None
-        rendered_summary = summary.format(**rendered_context) if summary else None
+        rendered_message = message.format_map(rendered_context)
+        rendered_title = title.format_map(rendered_context) if title else None
+        rendered_summary = summary.format_map(rendered_context) if summary else None
 
         send_teams_notification(
             teams_conn_id=teams_conn_id,
