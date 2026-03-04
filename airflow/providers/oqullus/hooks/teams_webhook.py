@@ -10,6 +10,24 @@ from airflow.providers.http.hooks.http import HttpHook
 class TeamsCommonHandler:
     """Contains common payload and URL handling for Teams webhook calls."""
 
+    def get_webhook_url(self, conn: Any | None) -> str:
+        """Return webhook URL from Airflow connection."""
+        if not conn:
+            raise ValueError("Cannot get Teams webhook URL: no connection supplied.")
+
+        extra = conn.extra_dejson
+        webhook_url = (
+            extra.get("webhook_url")
+            or extra.get("webhook")
+            or conn.password
+            or (conn.host if str(conn.host).startswith(("http://", "https://")) else None)
+        )
+        if not webhook_url:
+            raise ValueError(
+                "Cannot get Teams webhook URL from connection. Set extra.webhook_url or password."
+            )
+        return webhook_url
+
     def split_webhook_url(self, webhook_url: str) -> tuple[str, str]:
         """Split a full Teams webhook URL into base URL and endpoint."""
         parsed = urlsplit(webhook_url)
@@ -75,7 +93,7 @@ class TeamsWebhookHook(HttpHook):
     def __init__(
         self,
         *,
-        webhook_url: str,
+        http_conn_id: str | None = default_conn_name,
         message: str,
         title: str | None = None,
         summary: str | None = None,
@@ -84,9 +102,9 @@ class TeamsWebhookHook(HttpHook):
         proxy: str | None = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(method="POST", **kwargs)
+        super().__init__(method="POST", http_conn_id=http_conn_id, **kwargs)
         self.handler = TeamsCommonHandler()
-        self.webhook_url = webhook_url
+        self.http_conn_id = http_conn_id
         self.message = message
         self.title = title
         self.summary = summary
@@ -94,7 +112,9 @@ class TeamsWebhookHook(HttpHook):
         self.adaptive_card = adaptive_card
         self.proxy = proxy
 
-        self.base_url, self.endpoint = self.handler.split_webhook_url(webhook_url)
+        conn = self.get_connection(http_conn_id) if http_conn_id else None
+        resolved_webhook_url = self.handler.get_webhook_url(conn)
+        self.base_url, self.endpoint = self.handler.split_webhook_url(resolved_webhook_url)
 
     def execute(self) -> None:
         """Execute the Teams webhook call."""

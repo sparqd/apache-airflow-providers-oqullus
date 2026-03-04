@@ -22,7 +22,7 @@ class TeamsNotifier(BaseNotifier):
     """
     Teams BaseNotifier.
 
-    :param webhook_url: Full Teams incoming webhook/workflow URL.
+    :param teams_conn_id: Airflow connection ID storing Teams webhook URL secret.
     :param text: Plain text message for MessageCard payloads.
     :param title: MessageCard title.
     :param summary: MessageCard summary.
@@ -31,11 +31,18 @@ class TeamsNotifier(BaseNotifier):
     :param proxy: Optional HTTPS proxy.
     """
 
-    template_fields = ("webhook_url", "text", "title", "summary", "theme_color", "adaptive_card")
+    template_fields = (
+        "teams_conn_id",
+        "text",
+        "title",
+        "summary",
+        "theme_color",
+        "adaptive_card",
+    )
 
     def __init__(
         self,
-        webhook_url: str,
+        teams_conn_id: str = "teams_default",
         text: str = "",
         title: str | None = None,
         summary: str | None = None,
@@ -45,7 +52,7 @@ class TeamsNotifier(BaseNotifier):
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
-        self.webhook_url = webhook_url
+        self.teams_conn_id = teams_conn_id
         self.text = text
         self.title = title
         self.summary = summary
@@ -57,7 +64,7 @@ class TeamsNotifier(BaseNotifier):
     def hook(self) -> TeamsWebhookHook:
         """Teams webhook hook."""
         return TeamsWebhookHook(
-            webhook_url=self.webhook_url,
+            http_conn_id=self.teams_conn_id,
             message=self.text,
             title=self.title,
             summary=self.summary,
@@ -68,7 +75,7 @@ class TeamsNotifier(BaseNotifier):
 
     def notify(self, context: dict[str, Any]) -> None:
         """Send a message/card to a Teams channel."""
-        self.hook.webhook_url = self.webhook_url
+        self.hook.http_conn_id = self.teams_conn_id
         self.hook.message = self.text
         self.hook.title = self.title
         self.hook.summary = self.summary
@@ -83,9 +90,48 @@ def send_teams_notification(**kwargs: Any) -> TeamsNotifier:
     return TeamsNotifier(**kwargs)
 
 
+def send_teams_failure_notification(
+    *,
+    teams_conn_id: str = "teams_default",
+    **kwargs: Any,
+) -> TeamsNotifier:
+    """Build a Teams failure notifier using the default failure Adaptive Card template."""
+    return send_teams_notification(
+        teams_conn_id=teams_conn_id,
+        adaptive_card=build_failure_adaptive_card_template(),
+        **kwargs,
+    )
+
+
+def send_teams_retry_notification(
+    *,
+    teams_conn_id: str = "teams_default",
+    **kwargs: Any,
+) -> TeamsNotifier:
+    """Build a Teams retry notifier using the default retry Adaptive Card template."""
+    return send_teams_notification(
+        teams_conn_id=teams_conn_id,
+        adaptive_card=build_retry_adaptive_card_template(),
+        **kwargs,
+    )
+
+
+def send_teams_success_notification(
+    *,
+    teams_conn_id: str = "teams_default",
+    **kwargs: Any,
+) -> TeamsNotifier:
+    """Build a Teams success notifier using the default success Adaptive Card template."""
+    return send_teams_notification(
+        teams_conn_id=teams_conn_id,
+        adaptive_card=build_success_adaptive_card_template(),
+        **kwargs,
+    )
+
+
 def send_teams_webhook_notification(
     *,
-    webhook_url: str,
+    teams_conn_id: str = "teams_default",
     message: str,
     title: str | None = None,
     summary: str | None = None,
@@ -102,31 +148,30 @@ def send_teams_webhook_notification(
         rendered_title = title.format(**context) if title else None
         rendered_summary = summary.format(**context) if summary else None
 
-        TeamsWebhookHook(
-            webhook_url=webhook_url,
-            message=rendered_message,
+        send_teams_notification(
+            teams_conn_id=teams_conn_id,
+            text=rendered_message,
             title=rendered_title,
             summary=rendered_summary,
             theme_color=theme_color,
-        ).execute()
+        ).notify(context)
 
     return _notify
 
 
 def send_teams_adaptive_card_notification(
     *,
-    webhook_url: str,
+    teams_conn_id: str = "teams_default",
     card_template: dict[str, Any],
 ) -> Callable[[dict[str, Any]], None]:
     """Build an Airflow callback that sends an Adaptive Card to Teams."""
 
     def _notify(context: dict[str, Any]) -> None:
         rendered_card = _render_template_value(card_template, context)
-        TeamsWebhookHook(
-            webhook_url=webhook_url,
-            message="adaptive_card",
+        send_teams_notification(
+            teams_conn_id=teams_conn_id,
             adaptive_card=rendered_card,
-        ).execute()
+        ).notify(context)
 
     return _notify
 

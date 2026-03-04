@@ -4,14 +4,13 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.providers.oqullus.notifications.teams import (
-    build_failure_adaptive_card_template,
-    build_retry_adaptive_card_template,
-    build_success_adaptive_card_template,
-    send_teams_notification,
+    send_teams_failure_notification,
+    send_teams_retry_notification,
+    send_teams_success_notification,
 )
 from airflow.providers.oqullus.operators.spark_kubernetes import OqullusSparkKubernetesOperator
 
-TEAMS_WEBHOOK_URL = "https://outlook.office.com/webhook/your-webhook-id"
+TEAMS_CONN_ID = "teams_default"
 
 SPARK_TEMPLATE_SPEC = {
     "spark": {
@@ -52,10 +51,7 @@ with DAG(
     start_date=datetime(2024, 1, 1),
     schedule=None,
     catchup=False,
-    on_failure_callback=send_teams_notification(
-        webhook_url=TEAMS_WEBHOOK_URL,
-        adaptive_card=build_failure_adaptive_card_template(),
-    ),
+    on_failure_callback=send_teams_failure_notification(teams_conn_id=TEAMS_CONN_ID),
 ) as dag:
     run_notebook = OqullusSparkKubernetesOperator(
         task_id="run_notebook",
@@ -65,14 +61,8 @@ with DAG(
         delete_on_termination=False,
         retries=2,
         retry_delay=timedelta(minutes=1),
-        on_retry_callback=send_teams_notification(
-            webhook_url=TEAMS_WEBHOOK_URL,
-            adaptive_card=build_retry_adaptive_card_template(),
-        ),
-        on_success_callback=send_teams_notification(
-            webhook_url=TEAMS_WEBHOOK_URL,
-            adaptive_card=build_success_adaptive_card_template(),
-        ),
+        on_retry_callback=send_teams_retry_notification(teams_conn_id=TEAMS_CONN_ID),
+        on_success_callback=send_teams_success_notification(teams_conn_id=TEAMS_CONN_ID),
     )
 
     run_notebook
