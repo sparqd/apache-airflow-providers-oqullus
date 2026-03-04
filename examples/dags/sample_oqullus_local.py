@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.providers.cncf.kubernetes.operators.spark_kubernetes import SparkKubernetesOperator
 from airflow.providers.oqullus.notifications.multi import send_multi_channel_notification
-from airflow.providers.oqullus.operators.spark_kubernetes import OqullusSparkKubernetesOperator
 
 TEAMS_CONN_ID = "teams_default"
 SMTP_CONN_ID = "smtp_default"
@@ -63,7 +63,7 @@ with DAG(
         notifications=NOTIFICATION_CHANNELS,
     ),
 ) as dag:
-    run_notebook = OqullusSparkKubernetesOperator(
+    run_notebook = SparkKubernetesOperator(
         task_id="run_notebook",
         namespace="spark-team-a",
         template_spec=SPARK_TEMPLATE_SPEC,
