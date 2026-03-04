@@ -3,14 +3,21 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from airflow import DAG
-from airflow.providers.oqullus.notifications.teams import (
-    send_teams_failure_notification,
-    send_teams_retry_notification,
-    send_teams_success_notification,
-)
+from airflow.providers.oqullus.notifications.multi import send_multi_channel_notification
 from airflow.providers.oqullus.operators.spark_kubernetes import OqullusSparkKubernetesOperator
 
 TEAMS_CONN_ID = "teams_default"
+SMTP_CONN_ID = "smtp_default"
+
+NOTIFICATION_CHANNELS = [
+    {"channel": "teams", "teams_conn_id": TEAMS_CONN_ID},
+    {"channel": "teams", "teams_conn_id": "teams_secondary"},
+    {
+        "channel": "email",
+        "smtp_conn_id": SMTP_CONN_ID,
+        "to": ["ops@company.com"],
+    },
+]
 
 SPARK_TEMPLATE_SPEC = {
     "spark": {
@@ -51,7 +58,10 @@ with DAG(
     start_date=datetime(2024, 1, 1),
     schedule=None,
     catchup=False,
-    on_failure_callback=send_teams_failure_notification(teams_conn_id=TEAMS_CONN_ID),
+    on_failure_callback=send_multi_channel_notification(
+        event="failure",
+        notifications=NOTIFICATION_CHANNELS,
+    ),
 ) as dag:
     run_notebook = OqullusSparkKubernetesOperator(
         task_id="run_notebook",
@@ -61,8 +71,18 @@ with DAG(
         delete_on_termination=False,
         retries=2,
         retry_delay=timedelta(minutes=1),
-        on_retry_callback=send_teams_retry_notification(teams_conn_id=TEAMS_CONN_ID),
-        on_success_callback=send_teams_success_notification(teams_conn_id=TEAMS_CONN_ID),
+        on_execute_callback=send_multi_channel_notification(
+            event="execute",
+            notifications=NOTIFICATION_CHANNELS,
+        ),
+        on_retry_callback=send_multi_channel_notification(
+            event="retry",
+            notifications=NOTIFICATION_CHANNELS,
+        ),
+        on_success_callback=send_multi_channel_notification(
+            event="success",
+            notifications=NOTIFICATION_CHANNELS,
+        ),
     )
 
     run_notebook
